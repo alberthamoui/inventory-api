@@ -16,17 +16,7 @@ def status(db: sqlite3.Connection = Depends(getDb)):
 
 @app.post("/products/batch")
 def post_products_batch(payload: List[ProductCreate], db: sqlite3.Connection = Depends(getDb)):
-    created = 0
-    failed = 0
-
-    for product in payload:
-        try:
-            createProduct(db, product)
-            created += 1
-        except HTTPException:
-            failed += 1
-
-    return {"created": created, "failed": failed}
+    return importProducts(db, payload)
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= PRODUCTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 @app.post("/products")

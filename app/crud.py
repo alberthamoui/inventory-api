@@ -14,10 +14,20 @@ def createProduct(db: sqlite3.Connection, data: ProductCreate) -> dict:
             (data.name, data.ean13, data.quantity, data.alert_threshold),
         )
         db.commit()
-    except sqlite3.IntegrityError as e:
-        # EAN duplicated / CHECK do ean13 / negative quantity
-        raise HTTPException(status_code=400, detail="Invalid product or EAN13 already exists") from e
+    except sqlite3.IntegrityError as e: # EAN duplicated / CHECK do ean13 / negative quantity
+        msg = str(e).lower()
 
+        if "unique" in msg:
+            raise HTTPException(status_code=400, detail="EAN already exists")
+
+        if "check" in msg:
+            raise HTTPException(status_code=400, detail="Invalid value (negative or bad EAN)")
+
+        if "at least 13" in msg:
+            raise HTTPException(status_code=400, detail="Invalid EAN")
+
+        # print(msg)
+        raise HTTPException(status_code=400, detail="Invalid data") from e
     row = db.execute("SELECT * FROM Product WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)
 
@@ -61,7 +71,6 @@ def updateProduct(db: sqlite3.Connection, product_id: int, data: ProductCreate) 
 
     updated = db.execute("SELECT * FROM Product WHERE id = ?", (product_id,)).fetchone()
     return dict(updated)
-
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= MOVEMENTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 def createMovement(db: sqlite3.Connection, product_id: int, data: MovementCreate) -> dict:
     product = db.execute("SELECT * FROM Product WHERE id = ?", (product_id,)).fetchone()
@@ -106,3 +115,36 @@ def listAlerts(db: sqlite3.Connection) -> list[dict]:
         """
     ).fetchall()
     return [dict(r) for r in rows]
+
+def importProducts(db: sqlite3.Connection, products: list[ProductCreate]) -> dict:
+    created = 0
+    failed = 0
+    errors = []
+
+    for idx, product in enumerate(products):
+        try:
+            createProduct(db, product)
+            created += 1
+
+        except HTTPException as e:
+            failed += 1
+            errors.append({
+                "index": idx,
+                "ean13": product.ean13,
+                "error": e.detail
+            })
+
+        except Exception as e:
+            failed += 1
+            errors.append({
+                "index": idx,
+                "ean13": product.ean13,
+                "error": "Unexpected error"
+            })
+
+    return {
+        "created": created,
+        "failed": failed,
+        "errors": errors
+    }
+
