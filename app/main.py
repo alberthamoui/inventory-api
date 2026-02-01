@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Depends
 import sqlite3
+from typing import List
 
 from .crud import *
-from .schemas import ProductCreate
+from .schemas import ProductCreate, MovementCreate
 from .db import getDb 
 
 app = FastAPI(title="Inventory API")
@@ -12,6 +13,20 @@ app = FastAPI(title="Inventory API")
 def status(db: sqlite3.Connection = Depends(getDb)):
     db.execute("SELECT 1").fetchone()
     return {"status": "ok", "db": "connected"}
+
+@app.post("/products/batch")
+def post_products_batch(payload: List[ProductCreate], db: sqlite3.Connection = Depends(getDb)):
+    created = 0
+    failed = 0
+
+    for product in payload:
+        try:
+            createProduct(db, product)
+            created += 1
+        except HTTPException:
+            failed += 1
+
+    return {"created": created, "failed": failed}
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= PRODUCTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 @app.post("/products")
@@ -34,3 +49,13 @@ def delete_product_by_id(product_id: int, db: sqlite3.Connection = Depends(getDb
 @app.put("/products/{product_id}")
 def put_product(product_id: int, payload: ProductCreate, db: sqlite3.Connection = Depends(getDb)):
     return updateProduct(db, product_id, payload)
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-= MOVEMENTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+@app.post("/products/{id}/movements")
+def post_product_movements(id: int, payload: MovementCreate, db: sqlite3.Connection = Depends(getDb)):
+    return createMovement(db, id, payload)
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-= EXTRAS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+@app.get("/alerts")
+def get_alerts(db: sqlite3.Connection = Depends(getDb)):
+    return listAlerts(db)
