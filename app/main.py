@@ -2,6 +2,8 @@ from fastapi import FastAPI, Depends
 import sqlite3
 from typing import List
 
+from fastapi.responses import JSONResponse
+
 from .crud import *
 from .schemas import ProductCreate, MovementCreate
 from .db import getDb 
@@ -16,7 +18,15 @@ def status(db: sqlite3.Connection = Depends(getDb)):
 
 @app.post("/products/batch")
 def post_products_batch(payload: List[ProductCreate], db: sqlite3.Connection = Depends(getDb)):
-    return importProducts(db, payload)
+    result = importProducts(db, payload)
+    created = result["created"]
+    failed = result["failed"]
+    if created == 0:
+        return JSONResponse(status_code=400, content=result)
+    elif failed > 0 and created > 0:
+        return JSONResponse(status_code=207, content=result)
+    return JSONResponse(status_code=201, content=result)
+
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= PRODUCTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 @app.post("/products")

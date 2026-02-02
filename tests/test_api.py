@@ -40,7 +40,7 @@ def createProduct(client, name="Tylenol", ean13="1234567890123", quantity=10, al
     }
     return client.post("/products", json=payload)
 
-# ======================== TESTS ========================
+# ======================== TESTS POST ========================
 def test_create_product_success(client):
     response = createProduct(client)
     data = response.json()
@@ -66,6 +66,21 @@ def test_create_product_duplicate_ean13(client):
     r2 = createProduct(client, name="B", ean13="1111111111111")
     assert r2.status_code in [400, 409] # Mine returns 400 | 409 is the "official" code for conflict
 
+
+# ======================== TESTS GET ========================
+def test_get_products_lists_created(client):
+    createProduct(client, name="Listed", ean13="1111111111111")
+
+    response = client.get("/products")
+    data = response.json()
+
+    assert response.status_code == 200
+    assert isinstance(data, list)
+    assert any(p["ean13"] == "1111111111111" for p in data)
+    assert not any(p["ean13"] == "2222222222222" for p in data)
+
+
+# ======================== BATCH TESTS ========================
 def test_post_products_batch_creates_many(client):
     payload = [
         {"name": "R1", "ean13": "1111111111111", "quantity": 10, "alert_threshold": 1},
@@ -81,4 +96,14 @@ def test_post_products_batch_creates_many(client):
     assert isinstance(data["ids"], list)
     assert len(data["ids"]) == 3
 
+def test_post_products_batch_invalid_item(client):
+    payload = [
+        {"name": "R1", "ean13": "1111111111111", "quantity": 1, "alert_threshold": 0},
+        {"name": "R2", "ean13": "AAAAAAAAAAAAA", "quantity": 1, "alert_threshold": 0},
+    ]
 
+    r = client.post("/products/batch", json=payload)
+    assert r.status_code==207
+
+
+# ======================== DELETE TESTS ========================
