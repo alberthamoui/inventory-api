@@ -150,33 +150,38 @@ def listAlerts(db: sqlite3.Connection) -> list[dict]:
         """).fetchall()
     return [dict(r) for r in rows]
 
-def importProducts(db: sqlite3.Connection, products: list[ProductCreate]) -> dict:
+def importProducts(db: sqlite3.Connection, rows: list[dict]) -> dict:
     created = 0
     failed = 0
     errors = []
     ids = []
 
-    for idx, product in enumerate(products):
+    for idx, row in enumerate(rows, start=2):  # começa em 2 por causa do header
         try:
-            new_id = createProduct(db, product)["id"]
+            product_data = {
+                "name": row["name"],
+                "ean13": row["ean13"],
+                "quantity": int(row["quantity"]),
+                "alert_threshold": int(row["alert_threshold"])
+            }
+            new_id = createProduct(db, ProductCreate(**product_data))["id"]
             created += 1
             ids.append(new_id)
-            
 
         except HTTPException as e:
             failed += 1
             errors.append({
-                "index": idx,
-                "ean13": product.ean13,
+                "line": idx,
+                "ean13": row.get("ean13"),
                 "error": e.detail
             })
 
-        except Exception as e:
+        except Exception:
             failed += 1
             errors.append({
-                "index": idx,
-                "ean13": product.ean13,
-                "error": "Unexpected error"
+                "line": idx,
+                "ean13": row.get("ean13"),
+                "error": "Invalid data format"
             })
 
     return {

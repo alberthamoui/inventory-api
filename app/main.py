@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, UploadFile, File
+import csv
 import sqlite3
 from typing import List
 
@@ -16,9 +17,22 @@ def status(db: sqlite3.Connection = Depends(getDb)):
     db.execute("SELECT 1").fetchone()
     return {"status": "ok", "db": "connected"}
 
-@app.post("/products/batch")
-def post_products_batch(payload: List[ProductCreate], db: sqlite3.Connection = Depends(getDb)):
-    result = importProducts(db, payload)
+@app.post("/products/import")
+async def post_products_import(file: UploadFile = File(...), db: sqlite3.Connection = Depends(getDb)):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be CSV")
+
+    content = await file.read()
+    decoded = content.decode("utf-8").splitlines()
+
+    reader = csv.DictReader(decoded)
+
+    required_fields = {"name", "ean13", "quantity", "alert_threshold"}
+    if set(reader.fieldnames) != required_fields:
+        raise HTTPException(status_code=400, detail="Invalid CSV headers")
+
+    rows = list(reader)
+    result = importProducts(db, rows)
     created = result["created"]
     failed = result["failed"]
     if created == 0:

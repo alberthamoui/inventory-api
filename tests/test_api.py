@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.db import createTables
 from app.db import getDb
+from io import BytesIO
+
 
 # ======================== TEST DB ========================
 @pytest.fixture
@@ -92,30 +94,36 @@ def test_get_product_by_id(client):
     response2 = client.get("/products/2222222222222")
     assert response2.status_code == 404
 
-# ======================== BATCH TESTS ========================
-def test_post_products_batch_creates_many(client):
-    payload = [
-        {"name": "R1", "ean13": "1111111111111", "quantity": 10, "alert_threshold": 1},
-        {"name": "R2", "ean13": "2222222222222", "quantity": 20, "alert_threshold": 2},
-        {"name": "R3", "ean13": "3333333333333", "quantity": 30, "alert_threshold": 3},
-    ]
+# ======================== IMPORT TESTS ========================
+def make_csv(content: str):
+    return {
+        "file": ("products.csv", content.encode("utf-8"), "text/csv")
+    }
 
-    response = client.post("/products/batch", json=payload)
+def test_post_products_import_creates_many(client):
+    csv_content = (
+        "name,ean13,quantity,alert_threshold\n"
+        "R1,1111111111111,10,1\n"
+        "R2,2222222222222,20,2\n"
+        "R3,3333333333333,30,3\n"
+    )
+
+    response = client.post("/products/import", files=make_csv(csv_content))
     data = response.json()
 
-    assert response.status_code in (200, 201)
+    assert response.status_code == 201
     assert data["created"] == 3
     assert data["failed"] == 0
     assert isinstance(data["ids"], list)
     assert len(data["ids"]) == 3
 
-def test_post_products_batch_invalid_item(client):
-    payload = [
-        {"name": "R1", "ean13": "1111111111111", "quantity": 1, "alert_threshold": 0},
-        {"name": "R2", "ean13": "AAAAAAAAAAAAA", "quantity": 1, "alert_threshold": 0},
-    ]
-
-    response = client.post("/products/batch", json=payload)
+def test_post_products_import_invalid_item(client):
+    csv_content = (
+        "name,ean13,quantity,alert_threshold\n"
+        "R1,1111111111111,1,0\n"
+        "R2,AAAAAAAAAAAAA,1,0\n"
+    )
+    response = client.post("/products/import", files=make_csv(csv_content))
     assert response.status_code==207
 
 
