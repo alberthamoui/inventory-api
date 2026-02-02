@@ -120,11 +120,14 @@ def importProducts(db: sqlite3.Connection, products: list[ProductCreate]) -> dic
     created = 0
     failed = 0
     errors = []
+    ids = []
 
     for idx, product in enumerate(products):
         try:
-            createProduct(db, product)
+            new_id = createProduct(db, product)["id"]
             created += 1
+            ids.append(new_id)
+            
 
         except HTTPException as e:
             failed += 1
@@ -144,6 +147,7 @@ def importProducts(db: sqlite3.Connection, products: list[ProductCreate]) -> dic
 
     return {
         "created": created,
+        "ids": ids,
         "failed": failed,
         "errors": errors
     }
