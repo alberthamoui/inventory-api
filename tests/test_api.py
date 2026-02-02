@@ -78,6 +78,19 @@ def test_get_products_lists_created(client):
     assert any(p["ean13"] == "1111111111111" for p in data)
     assert not any(p["ean13"] == "2222222222222" for p in data)
 
+def test_get_product_by_id(client):
+    created = createProduct(client, name="GetMe", ean13="1111111111111").json()
+    productId = created["id"]
+
+    response = client.get(f"/products/{productId}")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == productId
+    assert data["ean13"] == "1111111111111"
+
+    response2 = client.get("/products/2222222222222")
+    assert response2.status_code == 404
 
 # ======================== BATCH TESTS ========================
 def test_post_products_batch_creates_many(client):
@@ -87,10 +100,10 @@ def test_post_products_batch_creates_many(client):
         {"name": "R3", "ean13": "3333333333333", "quantity": 30, "alert_threshold": 3},
     ]
 
-    r = client.post("/products/batch", json=payload)
-    data = r.json()
+    response = client.post("/products/batch", json=payload)
+    data = response.json()
 
-    assert r.status_code in (200, 201)
+    assert response.status_code in (200, 201)
     assert data["created"] == 3
     assert data["failed"] == 0
     assert isinstance(data["ids"], list)
@@ -102,8 +115,8 @@ def test_post_products_batch_invalid_item(client):
         {"name": "R2", "ean13": "AAAAAAAAAAAAA", "quantity": 1, "alert_threshold": 0},
     ]
 
-    r = client.post("/products/batch", json=payload)
-    assert r.status_code==207
+    response = client.post("/products/batch", json=payload)
+    assert response.status_code==207
 
 
 # ======================== DELETE TESTS ========================
@@ -124,3 +137,44 @@ def test_full_delete(client): # create -> move -> delete -> get
     get = client.get(f"/products/{productId}")
     assert get.status_code == 404
 
+    delete = client.delete(f"/products/{productId}")
+    assert delete.status_code==404
+
+
+# ======================== MOVEMENT TESTS ========================
+def test_movement_stock_negative(client):
+    created = createProduct(client, quantity=5).json()
+    productId = created["id"]
+
+    response = client.post(f"/products/{productId}/movements", json={
+        "type": "out",
+        "quantity": 10
+    })
+
+    assert response.status_code == 400
+
+def test_deleted_product_movements(client):
+    created = createProduct(client).json()
+    productId = created["id"]
+    client.delete(f"/products/{productId}")
+
+    response = client.post(f"/products/{productId}/movements", json={
+        "type": "in",
+        "quantity": 1
+    })
+
+    assert response.status_code == 404
+
+
+
+
+# ======================== ALERTS TESTS ========================
+def test_low_stock_alert(client):
+    createProduct(client, name="R1", ean13="1111111111111", quantity=2, alert_threshold=5)
+    createProduct(client, name="R2", ean13="2222222222222", quantity=10, alert_threshold=5)
+
+    response = client.get("/alerts")
+    data = response.json()
+
+    assert any(p["ean13"] == "1111111111111" for p in data)
+    assert not any(p["ean13"] == "2222222222222" for p in data)
