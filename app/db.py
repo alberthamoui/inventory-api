@@ -37,9 +37,21 @@ def createTables(conn: sqlite3.Connection): # DUVIDA: relation between quantity/
             reason     TEXT,
 
             FOREIGN KEY (product_id) REFERENCES Product(id) ON DELETE RESTRICT
+            
         );
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS DeletedProduct (
+            product_id INTEGER PRIMARY KEY,
+            deleted_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+
+            FOREIGN KEY (product_id) REFERENCES Product(id) ON DELETE CASCADE
+        );
+        """
+    )
+
 
     conn.commit()
 

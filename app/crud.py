@@ -32,26 +32,53 @@ def createProduct(db: sqlite3.Connection, data: ProductCreate) -> dict:
     return dict(row)
 
 def listProducts(db: sqlite3.Connection) -> list[dict]:
-    rows = db.execute("SELECT * FROM Product").fetchall()
+    rows = db.execute("""
+        SELECT Product.* FROM Product
+        LEFT JOIN DeletedProduct ON Product.id = DeletedProduct.product_id
+        WHERE DeletedProduct.product_id IS NULL
+    """).fetchall()
     return [dict(r) for r in rows]
 
 def getProductById(db, product_id: int) -> dict:
-    row = db.execute("SELECT * FROM Product WHERE id = ?",(product_id,)).fetchone()
+    row = db.execute("""
+        SELECT Product.*
+        FROM Product
+        LEFT JOIN DeletedProduct ON Product.id = DeletedProduct.product_id
+        WHERE DeletedProduct.product_id IS NULL
+        AND Product.id = ?
+    """,(product_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Product not found")
     return dict(row)
 
 def deleteProductById(db, product_id: int) -> dict:
-    row = db.execute("SELECT * FROM Product WHERE id = ?",(product_id,)).fetchone()
+    row = db.execute("""
+        SELECT Product.*
+        FROM Product
+        LEFT JOIN DeletedProduct ON Product.id = DeletedProduct.product_id
+        WHERE DeletedProduct.product_id IS NULL
+        AND Product.id = ?
+    """,(product_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    db.execute("DELETE FROM Product WHERE id = ?", (product_id,))
+    try:
+        db.execute("INSERT INTO DeletedProduct (product_id) VALUES (?)", (product_id,))
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=404, detail="Product not found (already deleted)")
+
     db.commit()
     return dict(row)
 
 def updateProduct(db: sqlite3.Connection, product_id: int, data: ProductCreate) -> dict:
-    row = db.execute("SELECT id FROM Product WHERE id = ?", (product_id,)).fetchone()
+    row = db.execute("""
+        SELECT Product.id
+        FROM Product
+        LEFT JOIN DeletedProduct ON Product.id = DeletedProduct.product_id
+        WHERE DeletedProduct.product_id IS NULL
+        AND Product.id = ?
+    """,(product_id,),).fetchone()
+    
     if not row:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -73,7 +100,13 @@ def updateProduct(db: sqlite3.Connection, product_id: int, data: ProductCreate) 
     return dict(updated)
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= MOVEMENTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 def createMovement(db: sqlite3.Connection, product_id: int, data: MovementCreate) -> dict:
-    product = db.execute("SELECT * FROM Product WHERE id = ?", (product_id,)).fetchone()
+    product = db.execute("""
+        SELECT Product.id, Product.quantity
+        FROM Product
+        LEFT JOIN DeletedProduct ON Product.id = DeletedProduct.product_id
+        WHERE DeletedProduct.product_id IS NULL
+        AND Product.id = ?
+    """,(product_id,),).fetchone()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -108,12 +141,13 @@ def createMovement(db: sqlite3.Connection, product_id: int, data: MovementCreate
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= EXTRAS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 def listAlerts(db: sqlite3.Connection) -> list[dict]:
-    rows = db.execute(
-        """
-        SELECT * FROM Product
-        WHERE quantity <= alert_threshold
-        """
-    ).fetchall()
+    rows = db.execute("""
+        SELECT Product.*
+        FROM Product
+        LEFT JOIN DeletedProduct ON Product.id = DeletedProduct.product_id
+        WHERE DeletedProduct.product_id IS NULL
+        AND Product.quantity <= Product.alert_threshold
+        """).fetchall()
     return [dict(r) for r in rows]
 
 def importProducts(db: sqlite3.Connection, products: list[ProductCreate]) -> dict:

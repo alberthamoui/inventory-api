@@ -17,7 +17,6 @@ def db_conn():
     yield conn
     conn.close()
 
-
 @pytest.fixture
 def client(db_conn):
     def override_get_db():
@@ -93,6 +92,7 @@ def test_post_products_batch_creates_many(client):
 
     assert r.status_code in (200, 201)
     assert data["created"] == 3
+    assert data["failed"] == 0
     assert isinstance(data["ids"], list)
     assert len(data["ids"]) == 3
 
@@ -107,3 +107,20 @@ def test_post_products_batch_invalid_item(client):
 
 
 # ======================== DELETE TESTS ========================
+def test_full_delete(client): # create -> move -> delete -> get
+    created = createProduct(client).json()
+    productId = created["id"]
+
+    move = client.post(f"/products/{productId}/movements", json={
+        "type": "out",
+        "quantity": 5,
+        "reason": "Testing delete"
+    })
+    assert move.status_code == 200
+
+    delete = client.delete(f"/products/{productId}")
+    assert delete.status_code==200
+
+    get = client.get(f"/products/{productId}")
+    assert get.status_code == 404
+
