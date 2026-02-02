@@ -1,15 +1,15 @@
 import sqlite3
-from pathlib import Path
+from sqlalchemy import create_engine
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= DATABASE =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-DB_PATH = Path("inventory.db")
+DATABASE_URL = "sqlite:///inventory.db"
 
-def createConnection(db_path: Path):
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
 
-def createTables(conn: sqlite3.Connection): # DUVIDA: relation between quantity/alert_threshold?
+def createTables(conn: sqlite3.Connection):
     ean13Glob = "[0-9]" * 13
 
     conn.execute(
@@ -41,6 +41,7 @@ def createTables(conn: sqlite3.Connection): # DUVIDA: relation between quantity/
         );
         """
     )
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS DeletedProduct (
@@ -52,30 +53,32 @@ def createTables(conn: sqlite3.Connection): # DUVIDA: relation between quantity/
         """
     )
 
-
     conn.commit()
 
-def getConnection():
-    conn = sqlite3.connect(DB_PATH)
+def configure_sqlite_conn(conn: sqlite3.Connection):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+
+def init_db():
+    conn = engine.raw_connection()
+    try:
+        configure_sqlite_conn(conn)
+        createTables(conn)
+    finally:
+        conn.close()
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= FAST API =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 def getDb():
-    conn = getConnection()
+    conn = engine.raw_connection()
+    configure_sqlite_conn(conn)
     try:
         yield conn
     finally:
         conn.close()
 
 def main():
-    conn = createConnection(DB_PATH)
-    try:
-        createTables(conn)
-        print(f"Tabelas criadas com sucesso em: {DB_PATH.resolve()}")
-    finally:
-        conn.close()
+    init_db()
+    print("inventory.db initialized.")
 
 if __name__ == "__main__":
     main()
