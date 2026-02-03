@@ -1,19 +1,24 @@
-import sqlite3
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, event
+from sqlalchemy.engine import Engine, Connection
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= DATABASE =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-DATABASE_URL = "sqlite:///inventory.db"
+DATABASE_URL = "sqlite+pysqlite:///inventory.db"
 
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
 )
 
-def createTables(conn: sqlite3.Connection):
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, _):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON;")
+    cursor.close()
+
+def createTables(conn: Connection):
     ean13Glob = "[0-9]" * 13
 
-    conn.execute(
-        f"""
+    conn.execute(text(f"""
         CREATE TABLE IF NOT EXISTS Product (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             name            TEXT NOT NULL,
@@ -23,11 +28,9 @@ def createTables(conn: sqlite3.Connection):
 
             CHECK (length(ean13) = 13 AND ean13 GLOB '{ean13Glob}')
         );
-        """
-    )
+    """))
 
-    conn.execute(
-        """
+    conn.execute(text("""
         CREATE TABLE IF NOT EXISTS Movement (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL,
@@ -37,44 +40,28 @@ def createTables(conn: sqlite3.Connection):
             reason     TEXT,
 
             FOREIGN KEY (product_id) REFERENCES Product(id) ON DELETE RESTRICT
-            
         );
-        """
-    )
+    """))
 
-    conn.execute(
-        """
+    conn.execute(text("""
         CREATE TABLE IF NOT EXISTS DeletedProduct (
             product_id INTEGER PRIMARY KEY,
             deleted_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
 
             FOREIGN KEY (product_id) REFERENCES Product(id) ON DELETE CASCADE
         );
-        """
-    )
-
-    conn.commit()
-
-def configure_sqlite_conn(conn: sqlite3.Connection):
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
+    """))
 
 def init_db():
-    conn = engine.raw_connection()
-    try:
-        configure_sqlite_conn(conn)
+    # engine.begin() abre transação e dá commit automaticamente
+    with engine.begin() as conn:
         createTables(conn)
-    finally:
-        conn.close()
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= FAST API =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 def getDb():
-    conn = engine.raw_connection()
-    configure_sqlite_conn(conn)
-    try:
+    # Uma transação por request (commit no sucesso, rollback no erro)
+    with engine.begin() as conn:
         yield conn
-    finally:
-        conn.close()
 
 def main():
     init_db()
