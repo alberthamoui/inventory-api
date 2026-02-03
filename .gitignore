@@ -1,3 +1,9 @@
 anotacoes.txt
 extras.txt
-extras.txt
+
+__pycache__/
+.venv/ # Not being used currently
+*.pyc
+.pytest_cache/
+inventory.db
+

@@ -62,7 +62,7 @@ pip install -r requirements.txt
 ### 3) Initialize the database
 
 ```bash
-python -m db.py
+python -m app.db
 ```
 
 ## Run the API
