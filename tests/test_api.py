@@ -1,29 +1,39 @@
-import sqlite3
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 
 from app.main import app
 from app.db import createTables
 from app.db import getDb
 from io import BytesIO
 
-
 # ======================== TEST DB ========================
 @pytest.fixture
 def db_conn():
-    # mesma conexão para o teste inteiro
-    conn = sqlite3.connect(":memory:", check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    createTables(conn)
-    yield conn
-    conn.close()
+    # Cria engine SQLAlchemy em memória
+    test_engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+    )
+    
+    # Ativa foreign keys para SQLite
+    @event.listens_for(test_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.close()
+    
+    # Cria as tabelas e mantém a conexão aberta
+    with test_engine.begin() as conn:
+        createTables(conn)
+        yield conn
 
 @pytest.fixture
 def client(db_conn):
     def override_get_db():
         # sempre retorna a MESMA conexão
-        return db_conn
+        yield db_conn
 
     app.dependency_overrides[getDb] = override_get_db
 
@@ -32,6 +42,8 @@ def client(db_conn):
 
     app.dependency_overrides.clear()
 
+
+# ======================== HELPERS ========================
 def createProduct(client, name="Tylenol", ean13="1234567890123", quantity=10, alert_threshold=2):
     payload = {
         "name": name,

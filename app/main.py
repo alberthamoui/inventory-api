@@ -44,8 +44,8 @@ async def post_products_import(file: UploadFile = File(...), db: Connection = De
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-= PRODUCTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 @app.post("/products")
-def post_products(file: UploadFile = File(...), db: Connection = Depends(getDb)):
-    return createProduct(db, file)
+def post_products(payload: ProductCreate, db: Connection = Depends(getDb)):
+    return createProduct(db, payload)
 
 @app.get("/products")
 def get_products(db: Connection = Depends(getDb)):
