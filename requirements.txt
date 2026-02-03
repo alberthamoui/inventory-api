@@ -1,0 +1,13 @@
+# Core Framework
+fastapi==0.115.0
+uvicorn==0.31.0
+
+# Database
+sqlalchemy==2.0.36
+
+# File Upload Support
+python-multipart==0.0.12
+
+# Testing
+pytest==9.0.2
+httpx==0.28.1
